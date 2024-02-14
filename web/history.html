@@ -1,0 +1,34 @@
+{{ define "history" }}
+
+<!DOCTYPE html>
+<html lang="ru">
+{{ template "head" }}
+<body>
+{{ template "header" }}
+<main class="d-flex flex-column align-items-center">
+    <h1 class="primer">История выражений</h1>
+    <table class="table table-hover table-dark" style="margin-top:50px; color: white; max-width: 80%; justify-self: center;">
+        <thead class="table-light">
+            <tr>
+                <th>Статус</th>
+                <th>Выражение</th>
+                <th>Дата создания</th>
+                <th>Дата завершения</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{  range .  }}
+            <tr>
+                <td>{{ .Status }}</td>
+                <td>{{ .Expression }}</td>
+                <td>{{ .CreatedAt }}</td>
+                <td>{{ .CompletedAt }}</td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+</main>
+</body>
+</html>
+
+{{ end }}
