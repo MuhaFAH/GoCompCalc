@@ -3,14 +3,16 @@
 <!DOCTYPE html>
 <html lang="ru">
 {{ template "head" }}
+<script src="../static/js/main.js"></script>
 <body>
-    {{ template "header" }}
-    <main>
-      <h1 class="primer">Введите ваш пример</h1>
-      <div class="form-group">
-        <input style="height: 50px; margin: 0 auto; width: 700px; margin-top: 50px;" type="email" class="form-control" id="exampleFormControlInput1" placeholder="выражение">
-      </div>
-    </main>
+  {{ template "header" }}
+  <main class="d-flex flex-column align-items-center">
+    <h1 class="primer">Введите ваш пример</h1>
+    <form onsubmit="return validateExpression()" action="/calculation" method="post">
+      <input name="send" style="height: 50px; margin: 0 auto; width: 700px; margin-top: 50px;" id="expression" type="text" class="form-control" placeholder="выражение">
+      <input style="margin: 20px auto;" class="btn btn-warning" type="submit" value="Проверить">
+    </form>
+  </main>
 </body>
 </html>
 

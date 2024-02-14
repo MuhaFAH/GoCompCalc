@@ -7,8 +7,10 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/Knetic/govaluate"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -41,7 +43,6 @@ func history(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("Ошибка сканирования строки из результата запроса:", err)
 			return
 		}
-		fmt.Println(expression)
 		expressions = append(expressions, expression)
 	}
 	if err := rows.Err(); err != nil {
@@ -137,6 +138,54 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 	templ.ExecuteTemplate(w, "main", nil)
 }
 
+func calculation(w http.ResponseWriter, r *http.Request) {
+	db, err := sql.Open("sqlite3", "data.db")
+	if err != nil {
+		fmt.Println("ОШИБКА ОТКРЫТИЯ БД 5")
+		return
+	}
+	defer db.Close()
+
+	data, err := db.Query(`
+	SELECT execution_time 
+	FROM Operations`)
+	operations := []int{}
+	for data.Next() {
+		var time int
+		err := data.Scan(&time)
+		if err != nil {
+			fmt.Println(err)
+		}
+		operations = append(operations, time)
+	}
+
+	expression := r.FormValue("send")
+
+	plus_time := operations[0] * strings.Count(expression, "+")
+	minus_time := operations[1] * strings.Count(expression, "-")
+	multiple_time := operations[2] * strings.Count(expression, "*")
+	division_time := operations[3] * strings.Count(expression, "/")
+
+	worker, err := govaluate.NewEvaluableExpression(expression)
+	if err != nil {
+		fmt.Println("Ошибка создания выражения:", err)
+		return
+	}
+
+	result, err := worker.Evaluate(nil)
+	if err != nil {
+		fmt.Println("Ошибка вычисления выражения:", err)
+		return
+	}
+
+	process_time := time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Millisecond
+	time.Sleep(process_time)
+
+	fmt.Printf("Результат вычисления выражения '%s' = %v\n", expression, result)
+
+	http.Redirect(w, r, "/", 301)
+}
+
 func main() {
 	db, err := sqlite.NewOrCreateDB("data.db")
 	if err != nil {
@@ -157,7 +206,7 @@ func main() {
 	mux.HandleFunc("/settings/", settingsHandler)
 	mux.HandleFunc("/save_operations", save_operations)
 	mux.HandleFunc("/history", history)
-
+	mux.HandleFunc("/calculation", calculation)
 	fmt.Println("Запуск сервера...")
 	http.ListenAndServe(":"+port, mux)
 }
