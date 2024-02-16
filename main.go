@@ -1,16 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"gocompcalc/pkg/demon"
 	"gocompcalc/storage/sqlite"
 	"html/template"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
-	"github.com/Knetic/govaluate"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -106,6 +107,9 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := db.Query(`
 	SELECT execution_time 
 	FROM Operations`)
+	if err != nil {
+		return
+	}
 	operations := []int{}
 	for data.Next() {
 		var time int
@@ -146,42 +150,66 @@ func calculation(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	data, err := db.Query(`
-	SELECT execution_time 
-	FROM Operations`)
-	operations := []int{}
-	for data.Next() {
-		var time int
-		err := data.Scan(&time)
-		if err != nil {
-			fmt.Println(err)
-		}
-		operations = append(operations, time)
+	// data, err := db.Query(`
+	// SELECT execution_time
+	// FROM Operations`)
+	// operations := []int{}
+	// for data.Next() {
+	// 	var time int
+	// 	err := data.Scan(&time)
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 	}
+	// 	operations = append(operations, time)
+	// }
+
+	// expression := r.FormValue("send")
+
+	// plus_time := operations[0] * strings.Count(expression, "+")
+	// minus_time := operations[1] * strings.Count(expression, "-")
+	// multiple_time := operations[2] * strings.Count(expression, "*")
+	// division_time := operations[3] * strings.Count(expression, "/")
+
+	url := "http://localhost:8080/calculate"
+	json_express := map[string]string{
+		"expression": r.FormValue("send"),
 	}
-
-	expression := r.FormValue("send")
-
-	plus_time := operations[0] * strings.Count(expression, "+")
-	minus_time := operations[1] * strings.Count(expression, "-")
-	multiple_time := operations[2] * strings.Count(expression, "*")
-	division_time := operations[3] * strings.Count(expression, "/")
-
-	worker, err := govaluate.NewEvaluableExpression(expression)
+	jsonData, err := json.Marshal(json_express)
 	if err != nil {
-		fmt.Println("Ошибка создания выражения:", err)
+		fmt.Println("Error marshalling JSON:", err)
+		return
+	}
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Println("Error sending request:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
+		fmt.Println("Error decoding JSON response:", err)
 		return
 	}
 
-	result, err := worker.Evaluate(nil)
-	if err != nil {
-		fmt.Println("Ошибка вычисления выражения:", err)
-		return
-	}
+	fmt.Println("Response:", result)
+	// worker, err := govaluate.NewEvaluableExpression(expression)
+	// if err != nil {
+	// 	fmt.Println("Ошибка создания выражения:", err)
+	// 	return
+	// }
 
-	process_time := time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Millisecond
-	time.Sleep(process_time)
+	// result, err := worker.Evaluate(nil)
+	// if err != nil {
+	// 	fmt.Println("Ошибка вычисления выражения:", err)
+	// 	return
+	// }
 
-	fmt.Printf("Результат вычисления выражения '%s' = %v\n", expression, result)
+	// process_time := time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Millisecond
+	// time.Sleep(process_time)
+
+	// fmt.Printf("Результат вычисления выражения '%s' = %v\n", expression, result)
 
 	http.Redirect(w, r, "/", 301)
 }
@@ -208,5 +236,7 @@ func main() {
 	mux.HandleFunc("/history", history)
 	mux.HandleFunc("/calculation", calculation)
 	fmt.Println("Запуск сервера...")
+	demon.RunServer()
+	fmt.Println("Оркестратор успешно запущен на порту: 3030...")
 	http.ListenAndServe(":"+port, mux)
 }
