@@ -17,3 +17,8 @@ body {
     border-radius: 10px;
     display: inline-block;
 }
+
+.table-headers {
+    text-align: center; 
+    vertical-align: middle;
+}

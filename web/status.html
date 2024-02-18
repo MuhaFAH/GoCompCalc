@@ -6,6 +6,7 @@
 <body>
   {{ template "header" }}
   <main class="d-flex flex-column align-items-center">
+    <button type="button" onClick="window.location.reload();" class="btn btn-light" style="margin-top: 40px;">Обновить</button>
     <h1 class="lead primer" style="margin-top: 100px; font-size: 35px;">Свободные воркеры</h1>
     <h2 style="font-size: 50px; color: greenyellow;">{{ .FreeWorkers }} | {{ .MaxWorkers }}</h2>
     <p class="lead primer" style="margin-top: 40px; font-size: 35px;">Выражения в обработке</h1>

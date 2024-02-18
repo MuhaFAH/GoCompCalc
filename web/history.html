@@ -6,15 +6,16 @@
 <body>
 {{ template "header" }}
 <main class="d-flex flex-column align-items-center">
-    <h1 class="primer">История выражений</h1>
+    <button type="button" onClick="window.location.reload();" class="btn btn-light" style="margin-top: 40px;">Обновить</button>
+    <h1 class="primer" style="margin-top: 20px;">История выражений</h1>
     <table class="table table-hover table-dark" style="margin-top:50px; color: white; max-width: 80%; justify-self: center;">
         <thead class="table-light">
             <tr>
-                <th>Статус</th>
-                <th>Результат</th>
-                <th>Выражение</th>
-                <th>Дата создания</th>
-                <th>Дата завершения</th>
+                <th class="table-headers">Статус</th>
+                <th class="table-headers">Результат</th>
+                <th class="table-headers">Выражение</th>
+                <th class="table-headers">Дата создания</th>
+                <th class="table-headers">Дата завершения</th>
             </tr>
         </thead>
         <tbody>
