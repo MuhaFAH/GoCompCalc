@@ -1,5 +1,3 @@
-var intervalId;
-
 function validateExpression() {
     var expression = document.getElementById("expression").value;
 
@@ -65,6 +63,8 @@ function sendExpression() {
         // Отправляем выражение на сервер
         socket.send(JSON.stringify({ expression: expression }));
     };
+
+    var intervalId;
 
     // Обработчик получения сообщения от сервера
     socket.onmessage = function(event) {
