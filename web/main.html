@@ -3,15 +3,17 @@
 <!DOCTYPE html>
 <html lang="ru">
 {{ template "head" }}
-<script src="../static/js/main.js"></script>
+<script src="/static/js/main.js"></script>
 <body>
   {{ template "header" }}
   <main class="d-flex flex-column align-items-center">
     <h1 class="primer">Введите ваш пример</h1>
-    <form onsubmit="return validateExpression()" action="/calculation" method="post">
+    <form>
       <input name="send" style="height: 50px; margin: 0 auto; width: 700px; margin-top: 50px;" id="expression" type="text" class="form-control" placeholder="выражение">
-      <input style="margin: 20px auto;" class="btn btn-warning" type="submit" value="Проверить">
+      <!-- <input style="margin: 20px auto;" class="btn btn-warning" type="submit" value="Проверить"> -->
+      <button style="margin: 20px auto;" type="button" class="btn btn-warning" onclick="validateAndSend()">Вычислить</button>
     </form>
+    <p class="lead" id="status" style="color: white"></p>
   </main>
 </body>
 </html>

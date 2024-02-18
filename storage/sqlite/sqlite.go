@@ -18,7 +18,9 @@ func NewOrCreateDB(path string) (*sql.DB, error) {
 	query := `
 	CREATE TABLE IF NOT EXISTS Expressions (
 		id INTEGER PRIMARY KEY,
+		key TEXT NOT NULL,
 		expression TEXT NOT NULL,
+		result TEXT,
 		status TEXT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		completed_at TIMESTAMP,
@@ -49,12 +51,12 @@ func NewOrCreateDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	query = `
-	INSERT INTO Expressions (expression, status, created_at, completed_at, error_message)
+	INSERT INTO Expressions (key, expression, result, status, created_at, completed_at, error_message)
 	VALUES 
-    ('2 + 2', 'в ожидании', '2024-02-14 12:00:00', '2024-02-14 12:00:01', 'nil'),
-    ('5 * 3', 'в ожидании', '2024-02-14 12:05:00', '2024-02-14 12:05:01', 'nil'),
-    ('10 / 2', 'в ожидании', '2024-02-14 12:10:00', '2024-02-14 12:10:01', 'nil'),
-    ('8 - 4', 'в ожидании', '2024-02-14 12:15:00', '2024-02-14 12:15:01', 'nil');`
+    ('111', '2 + 2', '4', 'выполнено', '2024-02-14 12:00:00', '2024-02-14 12:00:01', 'nil'),
+    ('112', '5 * 3', '15', 'выполнено', '2024-02-14 12:05:00', '2024-02-14 12:05:01', 'nil'),
+    ('113', '10 / 2', '5', 'выполнено', '2024-02-14 12:10:00', '2024-02-14 12:10:01', 'nil'),
+    ('114', '8 - 4', '4', 'выполнено', '2024-02-14 12:15:00', '2024-02-14 12:15:01', 'nil');`
 	_, err = db.Exec(query)
 	if err != nil {
 		return nil, err

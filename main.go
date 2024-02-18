@@ -143,6 +143,7 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func calculation(w http.ResponseWriter, r *http.Request) {
+	fmt.Println(1)
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
 		fmt.Println("ОШИБКА ОТКРЫТИЯ БД 5")
