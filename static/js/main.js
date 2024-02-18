@@ -20,18 +20,20 @@ function validateExpression() {
         return false;
     }
 
+    // Проверка на операторы
     if (/(\+{2,}|-{2,}|\/{2,}|\*{2,})/.test(expression)) {
         alert("Выражение содержит недопустимое использование операторов.");
         return false;
     }
 
-    // Проверка на последний символ оператора
+    // Проверка на последний символ
     var lastChar = expression.trim().slice(-1);
     if (lastChar === '+' || lastChar === '-' || lastChar === '*' || lastChar === '/' || lastChar === '.') {
         alert("Выражение не может заканчиваться оператором или точкой.");
         return false;
     }
 
+    // Проверка на скобочность выражения
     if (/^[()]+$/.test(expression)) {
         alert("Выражение не может состоять только из скобок.");
         return false;
@@ -40,7 +42,6 @@ function validateExpression() {
     return true;
 }
 
-// Функция для проверки баланса скобок
 function isBalanced(expression) {
     var stack = [];
     for (var i = 0; i < expression.length; i++) {
@@ -54,16 +55,17 @@ function isBalanced(expression) {
             stack.pop();
         }
     }
-    return stack.length === 0; // Должно быть пустое после обхода
+    return stack.length === 0; // Если всё ровно, то хорошо
 }
 
 function sendExpression() {
-    var expression = document.getElementById("expression").value;
 
+    var expression = document.getElementById("expression").value;
     var statusElement = document.getElementById("status");
     var statusText = document.getElementById("status_text");
     var processText = document.getElementById("process_text");
     var processResult = document.getElementById("process_result");
+
     statusText.style.display = 'block';
     processText.innerHTML = 'Статус';
     processText.style.display = 'block';
@@ -73,45 +75,38 @@ function sendExpression() {
     statusElement.innerHTML = expression;
     statusElement.style.display = 'block';
 
-    // Создаем WebSocket соединение
     var socket = new WebSocket("ws://localhost:8080/ws");
 
-    // Обработчик открытия соединения
     socket.onopen = function(event) {
-        console.log("WebSocket connection opened");
-
-        // Отправляем выражение на сервер
+        console.log("WebSocket соединение успешно установлено");
         socket.send(JSON.stringify({ expression: expression }));
     };
 
     var intervalId;
 
-    // Обработчик получения сообщения от сервера
     socket.onmessage = function(event) {
         var data = JSON.parse(event.data);
         var agentId = data.id;
-        console.log(1)
         if (data.result !== null && data.result !== undefined) {
-            console.log(2)
             statusElement.innerHTML = data.expression;
             processText.innerHTML = "Результат";
             processResult.style.color = "green";
             processResult.innerHTML = data.result;
             clearInterval(intervalId);
         } else {
-            console.log(3)
-            // Если результат не доступен, отправляем запрос на сервер для получения результата
             intervalId = setInterval(function() {
-                console.log(4)
-                socket.send(JSON.stringify({ agent_id: agentId }));
-            }, 2000); // Повторяем запрос каждую секунду
+                socket.send(JSON.stringify({ getresult: agentId }));
+            }, 2000);
         }
     };
 
-    // Обработчик ошибок
     socket.onerror = function(error) {
         console.error('WebSocket Error:', error);
-        statusElement.innerHTML = "Ошибка: " + error.message;
+        statusElement.innerHTML = data.expression;
+        processText.innerHTML = "Результат";
+        processResult.style.color = "red";
+        processResult.innerHTML = "Ошибка";
+        clearInterval(intervalId);
     };
 }
 
