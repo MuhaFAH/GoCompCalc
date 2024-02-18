@@ -82,7 +82,7 @@ function sendExpression() {
             intervalId = setInterval(function() {
                 console.log(4)
                 socket.send(JSON.stringify({ agent_id: agentId }));
-            }, 1000); // Повторяем запрос каждую секунду
+            }, 2000); // Повторяем запрос каждую секунду
         }
     };
 

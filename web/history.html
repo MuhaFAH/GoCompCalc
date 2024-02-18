@@ -11,6 +11,7 @@
         <thead class="table-light">
             <tr>
                 <th>Статус</th>
+                <th>Результат</th>
                 <th>Выражение</th>
                 <th>Дата создания</th>
                 <th>Дата завершения</th>
@@ -20,9 +21,10 @@
         {{  range .  }}
             <tr>
                 <td>{{ .Status }}</td>
+                <td>{{ .Result }}</td>
                 <td>{{ .Expression }}</td>
-                <td>{{ .CreatedAt }}</td>
-                <td>{{ .CompletedAt }}</td>
+                <td>{{ .CreatedAt.Format "2006-01-02 15:04:05" }}</td>
+                <td>{{ .CompletedAt.Format "2006-01-02 15:04:05" }}</td>
             </tr>
         {{ end }}
         </tbody>

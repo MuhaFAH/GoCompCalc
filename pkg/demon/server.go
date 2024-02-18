@@ -44,13 +44,15 @@ func RunServer() {
 		handleRequest(w, r, expressionCh)
 	})
 
-	http.HandleFunc("/result", handleResult)
+	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/ws", handleWebSocket)
+
 	handler := c.Handler(http.DefaultServeMux)
 	go func() {
 		fmt.Println("Демон успешно запущен на порту: 8080...")
 		http.ListenAndServe(":8080", handler)
 	}()
+	checkExpressions()
 }
 
 func handleRequest(w http.ResponseWriter, r *http.Request, expressionCh chan<- *ExpressionJob) {
@@ -87,39 +89,75 @@ func handleRequest(w http.ResponseWriter, r *http.Request, expressionCh chan<- *
 	json.NewEncoder(w).Encode(response)
 }
 
-func handleResult(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+func checkExpressions() {
+	db, err := sql.Open("sqlite3", "data.db")
+	if err != nil {
+		fmt.Println("ОШИБКА ОТКРЫТИЯ БД 44")
 		return
 	}
+	defer db.Close()
+	data, err := db.Query(`
+	SELECT key, expression
+	FROM Expressions
+	WHERE status = 'в обработке'`)
+	for data.Next() {
+		var id, expr string
+		err := data.Scan(&id, &expr)
+		if err != nil {
+			fmt.Println(err)
+		}
+		expressionCh <- &ExpressionJob{ID: id, Expression: expr}
+	}
+	if err != nil {
+		fmt.Println("ОШИБКА")
+		return
+	}
+}
 
-	queryValues := r.URL.Query()
-	agentID := queryValues.Get("agent_id")
-
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	db, err := sql.Open("sqlite3", "data.db")
+	if err != nil {
+		fmt.Println("ОШИБКА ОТКРЫТИЯ БД 5")
+		return
+	}
+	defer db.Close()
 	mutex.Lock()
-	defer mutex.Unlock()
-
-	agent, ok := agents[agentID]
-	if !ok {
-		http.Error(w, "Agent not found", http.StatusNotFound)
+	data, err := db.Query(`
+	SELECT expression
+	FROM Expressions
+	WHERE status = 'в обработке'`)
+	if err != nil {
+		fmt.Println("ОШИБКА ВЫБОРА ОПЕРАЦИЙ")
 		return
 	}
-
-	if agent.Result == nil {
-		http.Error(w, "Result not available yet", http.StatusNotFound)
-		return
+	mutex.Unlock()
+	in_progress := []string{}
+	for data.Next() {
+		var expr string
+		err := data.Scan(&expr)
+		if err != nil {
+			fmt.Println(err)
+		}
+		in_progress = append(in_progress, expr)
+	}
+	freeWorkers := maxWorkers - len(in_progress)
+	statusData := map[string]interface{}{
+		"free_workers":           freeWorkers,
+		"expressions_in_process": in_progress,
+		"max_workers":            maxWorkers,
 	}
 
-	response := map[string]interface{}{
-		"id":         agentID,
-		"expression": agent.Expression,
-		"result":     agent.Result,
-	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(statusData)
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	db, err := sql.Open("sqlite3", "data.db")
+	if err != nil {
+		fmt.Println("ОШИБКА ОТКРЫТИЯ БД 22")
+		return
+	}
+	defer db.Close()
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -148,12 +186,17 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if ok2 {
-			result, ok := agents[agent]
-			if ok {
+			var (
+				result string
+				expr   string
+			)
+			data := db.QueryRow("SELECT result, expression FROM Expressions WHERE key = ?", agent)
+			data.Scan(&result, &expr)
+			if len(result) > 0 {
 				response := map[string]interface{}{
-					"result":     result.Result,
-					"expression": result.Expression,
-					"id":         result.ID,
+					"result":     result,
+					"expression": expr,
+					"id":         agent,
 				}
 				err = conn.WriteJSON(response)
 				if err != nil {
@@ -192,7 +235,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func worker(expressionCh <-chan *ExpressionJob) {
+	db, err := sql.Open("sqlite3", "data.db")
+	if err != nil {
+		fmt.Println("ОШИБКА ОТКРЫТИЯ БД 5")
+		return
+	}
+	defer db.Close()
 	for {
+		time.Sleep(5 * time.Second)
 		job := <-expressionCh
 
 		result, err := evaluateExpression(job.Expression, job.ID)
@@ -200,11 +250,12 @@ func worker(expressionCh <-chan *ExpressionJob) {
 			fmt.Printf("Error evaluating expression for job %s: %s\n", job.ID, err)
 			continue
 		}
-
-		job.Result = result
-
 		mutex.Lock()
-		agents[job.ID] = job
+		_, err = db.Exec(fmt.Sprintf("UPDATE Expressions SET completed_at = CURRENT_TIMESTAMP, result = '%s', status = '%s' WHERE key = '%s'", fmt.Sprintf("%v", result), "выполнено", job.ID))
+		if err != nil {
+			fmt.Println("ОШИБКА РЕЗУЛЬТАТИРОВАНИЯ ВЫРАЖЕНИЯ")
+			return
+		}
 		mutex.Unlock()
 	}
 }
@@ -252,10 +303,5 @@ func evaluateExpression(expression, id string) (interface{}, error) {
 	}
 	fmt.Println(time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Second)
 	time.Sleep(time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Second)
-	_, err = db.Exec(fmt.Sprintf("UPDATE Expressions SET completed_at = CURRENT_TIMESTAMP, result = '%s', status = '%s' WHERE key = '%s'", fmt.Sprintf("%v", result), "выполнено", id))
-	if err != nil {
-		fmt.Println("ОШИБКА РЕЗУЛЬТАТИРОВАНИЯ ВЫРАЖЕНИЯ")
-		return nil, fmt.Errorf("2")
-	}
 	return result, nil
 }

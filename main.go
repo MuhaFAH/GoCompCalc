@@ -17,6 +17,7 @@ import (
 
 type Expression struct {
 	Status      string
+	Result      string
 	Expression  string
 	CreatedAt   time.Time
 	CompletedAt time.Time
@@ -24,24 +25,27 @@ type Expression struct {
 
 func history(w http.ResponseWriter, r *http.Request) {
 	templ, err := template.ParseFiles("web/history.html", "web/includes/header.html", "web/includes/head.html")
+	if err != nil {
+		fmt.Println("ОШИБКА ШАБЛОНИНГА")
+		return
+	}
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
 		fmt.Println("ОШИБКА ПОДКЛЮЧЕНИЯ БД 3")
 		return
 	}
 	defer db.Close()
-	rows, err := db.Query("SELECT status, expression, created_at, completed_at FROM Expressions")
+	rows, err := db.Query("SELECT status, result, expression, created_at, completed_at FROM Expressions WHERE status = 'выполнено'")
 	if err != nil {
 		fmt.Println("Ошибка выполнения запроса к базе данных:", err)
 		return
 	}
-	defer rows.Close()
 	var expressions []Expression
 	for rows.Next() {
 		var expression Expression
-		err := rows.Scan(&expression.Status, &expression.Expression, &expression.CreatedAt, &expression.CompletedAt)
+		err := rows.Scan(&expression.Status, &expression.Result, &expression.Expression, &expression.CreatedAt, &expression.CompletedAt)
 		if err != nil {
-			fmt.Println("Ошибка сканирования строки из результата запроса:", err)
+			fmt.Println("Ошибка", err)
 			return
 		}
 		expressions = append(expressions, expression)
@@ -50,6 +54,27 @@ func history(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Ошибка получения результатов запроса:", err)
 		return
 	}
+	rows.Close()
+	// <--->
+	rows, err = db.Query("SELECT status, expression, created_at FROM Expressions WHERE status = 'в обработке'")
+	if err != nil {
+		fmt.Println("Ошибка выполнения запроса к базе данных:", err)
+		return
+	}
+	for rows.Next() {
+		var expression Expression
+		err := rows.Scan(&expression.Status, &expression.Expression, &expression.CreatedAt)
+		if err != nil {
+			fmt.Println("Ошибка", err)
+			return
+		}
+		expressions = append(expressions, expression)
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Println("Ошибка получения результатов запроса:", err)
+		return
+	}
+	rows.Close()
 	templ.ExecuteTemplate(w, "history", expressions)
 }
 func save_operations(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +116,43 @@ func save_operations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/settings", 301)
+}
+
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	templ, err := template.ParseFiles("web/status.html", "web/includes/header.html", "web/includes/head.html")
+	if err != nil {
+		fmt.Println("ОШИБКА ШАБЛОНИНГА")
+		return
+	}
+	resp, err := http.Get("http://localhost:8080/status")
+	if err != nil {
+		http.Error(w, "Ошибка получения информации о статусе: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	var statusData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&statusData); err != nil {
+		http.Error(w, "Ошибка декодирования JSON: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println(statusData)
+	// Получаем количество свободных воркеров и список выражений в обработке
+	freeWorkers := fmt.Sprintf("%v", statusData["free_workers"])
+	maxWorkers := fmt.Sprintf("%v", statusData["max_workers"])
+
+	expressions := fmt.Sprintf("%v", statusData["expressions_in_process"])
+	if expressions == "[]" {
+		expressions = "Нет активных вычислений"
+	} else {
+		expressions = expressions[1 : len(expressions)-1]
+	}
+	context := struct {
+		FreeWorkers string
+		MaxWorkers  string
+		Expressions string
+	}{FreeWorkers: freeWorkers, MaxWorkers: maxWorkers, Expressions: expressions}
+	templ.ExecuteTemplate(w, "status", context)
 }
 
 func settingsHandler(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +298,8 @@ func main() {
 	mux.HandleFunc("/save_operations", save_operations)
 	mux.HandleFunc("/history", history)
 	mux.HandleFunc("/calculation", calculation)
+	mux.HandleFunc("/status", statusHandler)
+
 	fmt.Println("Запуск сервера...")
 	demon.RunServer()
 	fmt.Println("Оркестратор успешно запущен на порту: 3030...")

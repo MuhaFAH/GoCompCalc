@@ -1,0 +1,17 @@
+{{ define "status" }}
+
+<!DOCTYPE html>
+<html lang="ru">
+{{ template "head" }}
+<body>
+  {{ template "header" }}
+  <main class="d-flex flex-column align-items-center">
+    <h1 class="lead primer" style="margin-top: 100px; font-size: 35px;">Свободные воркеры</h1>
+    <h2 style="font-size: 50px;">{{ .FreeWorkers }} | {{ .MaxWorkers }}</h2>
+    <p class="lead primer" style="margin-top: 40px; font-size: 35px;">Выражения в обработке</h1>
+        <h2 style="font-size: 30px;">{{ .Expressions }}</h2>
+  </main>
+</body>
+</html>
+
+{{ end }}
