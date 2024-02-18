@@ -3,7 +3,17 @@ body {
 }
 
 .primer {
-    text-align: center; 
+    text-align: center;
     margin-top: 45px;
     color: white;
+}
+
+.list-element {
+    color: white;
+    padding: 5px 45px;
+    text-align: center;
+    margin: 5px;
+    border: 1px solid white;
+    border-radius: 10px;
+    display: inline-block;
 }

@@ -35,12 +35,33 @@ func history(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	rows, err := db.Query("SELECT status, result, expression, created_at, completed_at FROM Expressions WHERE status = 'выполнено'")
+	var expressions []Expression
+	// <--->
+	rows, err := db.Query("SELECT status, expression, created_at FROM Expressions WHERE status = 'в обработке'")
 	if err != nil {
 		fmt.Println("Ошибка выполнения запроса к базе данных:", err)
 		return
 	}
-	var expressions []Expression
+	for rows.Next() {
+		var expression Expression
+		err := rows.Scan(&expression.Status, &expression.Expression, &expression.CreatedAt)
+		if err != nil {
+			fmt.Println("Ошибка", err)
+			return
+		}
+		expressions = append(expressions, expression)
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Println("Ошибка получения результатов запроса:", err)
+		return
+	}
+	rows.Close()
+	// <-->
+	rows, err = db.Query("SELECT status, result, expression, created_at, completed_at FROM Expressions WHERE status = 'выполнено'")
+	if err != nil {
+		fmt.Println("Ошибка выполнения запроса к базе данных:", err)
+		return
+	}
 	for rows.Next() {
 		var expression Expression
 		err := rows.Scan(&expression.Status, &expression.Result, &expression.Expression, &expression.CreatedAt, &expression.CompletedAt)
@@ -55,15 +76,15 @@ func history(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows.Close()
-	// <--->
-	rows, err = db.Query("SELECT status, expression, created_at FROM Expressions WHERE status = 'в обработке'")
+	// <-->
+	rows, err = db.Query("SELECT status, expression, created_at, completed_at FROM Expressions WHERE status = 'ошибка'")
 	if err != nil {
 		fmt.Println("Ошибка выполнения запроса к базе данных:", err)
 		return
 	}
 	for rows.Next() {
 		var expression Expression
-		err := rows.Scan(&expression.Status, &expression.Expression, &expression.CreatedAt)
+		err := rows.Scan(&expression.Status, &expression.Expression, &expression.CreatedAt, &expression.CompletedAt)
 		if err != nil {
 			fmt.Println("Ошибка", err)
 			return
@@ -131,27 +152,25 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	var statusData map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&statusData); err != nil {
-		http.Error(w, "Ошибка декодирования JSON: "+err.Error(), http.StatusInternalServerError)
+	// var statusData map[string]interface{}
+	// if err := json.NewDecoder(resp.Body).Decode(&statusData); err != nil {
+	// 	http.Error(w, "Ошибка декодирования JSON: "+err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+	if err != nil {
+		http.Error(w, "Error reading request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Println(statusData)
-	// Получаем количество свободных воркеров и список выражений в обработке
-	freeWorkers := fmt.Sprintf("%v", statusData["free_workers"])
-	maxWorkers := fmt.Sprintf("%v", statusData["max_workers"])
-
-	expressions := fmt.Sprintf("%v", statusData["expressions_in_process"])
-	if expressions == "[]" {
-		expressions = "Нет активных вычислений"
-	} else {
-		expressions = expressions[1 : len(expressions)-1]
+	var context struct {
+		FreeWorkers int      `json:"free_workers"`
+		MaxWorkers  int      `json:"max_workers"`
+		Expressions []string `json:"expressions_in_process"`
 	}
-	context := struct {
-		FreeWorkers string
-		MaxWorkers  string
-		Expressions string
-	}{FreeWorkers: freeWorkers, MaxWorkers: maxWorkers, Expressions: expressions}
+	err = json.NewDecoder(resp.Body).Decode(&context)
+	if err != nil {
+		http.Error(w, "Error decoding JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	templ.ExecuteTemplate(w, "status", context)
 }
 

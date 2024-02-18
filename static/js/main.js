@@ -25,6 +25,18 @@ function validateExpression() {
         return false;
     }
 
+    // Проверка на последний символ оператора
+    var lastChar = expression.trim().slice(-1);
+    if (lastChar === '+' || lastChar === '-' || lastChar === '*' || lastChar === '/' || lastChar === '.') {
+        alert("Выражение не может заканчиваться оператором или точкой.");
+        return false;
+    }
+
+    if (/^[()]+$/.test(expression)) {
+        alert("Выражение не может состоять только из скобок.");
+        return false;
+    }
+
     return true;
 }
 
@@ -46,12 +58,20 @@ function isBalanced(expression) {
 }
 
 function sendExpression() {
-    // Получаем значение введенного выражения
     var expression = document.getElementById("expression").value;
 
-    // Показываем пользователю, что выражение отправлено на обработку
     var statusElement = document.getElementById("status");
-    statusElement.innerHTML = "Выражение: " + expression + ",<br> Статус: в обработке";
+    var statusText = document.getElementById("status_text");
+    var processText = document.getElementById("process_text");
+    var processResult = document.getElementById("process_result");
+    statusText.style.display = 'block';
+    processText.innerHTML = 'Статус';
+    processText.style.display = 'block';
+    processResult.innerHTML = 'В обработке';
+    processResult.style.color = "orange";
+    processResult.style.display = 'block';
+    statusElement.innerHTML = expression;
+    statusElement.style.display = 'block';
 
     // Создаем WebSocket соединение
     var socket = new WebSocket("ws://localhost:8080/ws");
@@ -73,8 +93,10 @@ function sendExpression() {
         console.log(1)
         if (data.result !== null && data.result !== undefined) {
             console.log(2)
-            // Если результат получен, отображаем его
-            statusElement.innerHTML = "Выражение: " + data.expression + ",<br> Результат: " + data.result;
+            statusElement.innerHTML = data.expression;
+            processText.innerHTML = "Результат";
+            processResult.style.color = "green";
+            processResult.innerHTML = data.result;
             clearInterval(intervalId);
         } else {
             console.log(3)

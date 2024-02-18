@@ -18,7 +18,6 @@ import (
 
 var (
 	maxWorkers = 10 // Максимальное количество горутин
-	agents     = make(map[string]*ExpressionJob)
 	mutex      sync.Mutex
 	upgrader   = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -40,10 +39,6 @@ func RunServer() {
 		go worker(expressionCh)
 	}
 
-	http.HandleFunc("/calculate", func(w http.ResponseWriter, r *http.Request) {
-		handleRequest(w, r, expressionCh)
-	})
-
 	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/ws", handleWebSocket)
 
@@ -53,40 +48,6 @@ func RunServer() {
 		http.ListenAndServe(":8080", handler)
 	}()
 	checkExpressions()
-}
-
-func handleRequest(w http.ResponseWriter, r *http.Request, expressionCh chan<- *ExpressionJob) {
-	log.Println("Received request")
-
-	fmt.Println(22)
-	if r.Method != http.MethodPost {
-		fmt.Println("Method", r.Method)
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	fmt.Println(1)
-	var data map[string]string
-	err := json.NewDecoder(r.Body).Decode(&data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	fmt.Println(2)
-	expression, ok := data["expression"]
-	if !ok {
-		http.Error(w, "Expression not found in JSON", http.StatusBadRequest)
-		return
-	}
-	fmt.Println(3)
-	id := uuid.New().String()
-	expressionCh <- &ExpressionJob{ID: id, Expression: expression}
-	response := map[string]interface{}{
-		"status":     "expression sent for evaluation",
-		"expression": expression,
-		"id":         id,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
 }
 
 func checkExpressions() {
@@ -141,14 +102,18 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		in_progress = append(in_progress, expr)
 	}
 	freeWorkers := maxWorkers - len(in_progress)
-	statusData := map[string]interface{}{
-		"free_workers":           freeWorkers,
-		"expressions_in_process": in_progress,
-		"max_workers":            maxWorkers,
-	}
-
+	statusData := struct {
+		FreeWorkers int      `json:"free_workers"`
+		MaxWorkers  int      `json:"max_workers"`
+		InProcess   []string `json:"expressions_in_process"`
+	}{FreeWorkers: freeWorkers, MaxWorkers: maxWorkers, InProcess: in_progress}
+	jsonData, _ := json.Marshal(statusData)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(statusData)
+	_, err = w.Write(jsonData)
+	if err != nil {
+		http.Error(w, "Error writing JSON response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +212,11 @@ func worker(expressionCh <-chan *ExpressionJob) {
 
 		result, err := evaluateExpression(job.Expression, job.ID)
 		if err != nil {
-			fmt.Printf("Error evaluating expression for job %s: %s\n", job.ID, err)
+			_, err = db.Exec(fmt.Sprintf("UPDATE Expressions SET completed_at = CURRENT_TIMESTAMP, status = '%s' WHERE key = '%s'", "ошибка", job.ID))
+			if err != nil {
+				fmt.Println("ОШИБКА ОШИБОЧНОГО")
+				return
+			}
 			continue
 		}
 		mutex.Lock()
@@ -301,7 +270,10 @@ func evaluateExpression(expression, id string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Second)
-	time.Sleep(time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Second)
+	timing := time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Second
+	if timing < 1*time.Second {
+		timing = time.Second
+	}
+	time.Sleep(timing)
 	return result, nil
 }

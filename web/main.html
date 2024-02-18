@@ -8,12 +8,14 @@
   {{ template "header" }}
   <main class="d-flex flex-column align-items-center">
     <h1 class="primer">Введите ваш пример</h1>
-    <form>
+    <form class="d-flex flex-column align-items-center">
       <input name="send" style="height: 50px; margin: 0 auto; width: 700px; margin-top: 50px;" id="expression" type="text" class="form-control" placeholder="выражение">
-      <!-- <input style="margin: 20px auto;" class="btn btn-warning" type="submit" value="Проверить"> -->
-      <button style="margin: 20px auto;" type="button" class="btn btn-warning" onclick="validateAndSend()">Вычислить</button>
+      <button type="button" style="margin-top: 20px;" class="btn btn-warning" onclick="validateAndSend()">Вычислить</button>
     </form>
-    <p class="lead" id="status" style="color: white"></p>
+    <p class="primer" id="status_text" style="color: white; font-size: 25px; margin-top: 25px; display: none;">Выражение</p>
+    <p class="list-element" style="font-size: 20px; display: none;" id="status"></p>
+    <p class="primer" id="process_text" style="color: white; font-size: 25px; margin-top: 10px; display: none;">Статус</p>
+    <p id="process_result" style="color: orange; font-size: 25px; margin: 0; display: none;">В обработке</p>
   </main>
 </body>
 </html>
