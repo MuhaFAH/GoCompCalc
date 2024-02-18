@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// запуск сервера и всех обработчиков
 func RunServer() {
 	mux := http.NewServeMux()
 
@@ -24,6 +25,7 @@ func RunServer() {
 	http.ListenAndServe(":3000", mux)
 }
 
+// структура для выражения
 type Expression struct {
 	Status      string
 	Result      string
@@ -32,6 +34,7 @@ type Expression struct {
 	CompletedAt time.Time
 }
 
+// обработчик для страницы истории выражений
 func historyHandler(w http.ResponseWriter, r *http.Request) {
 	html_tmpl, err := template.ParseFiles("web/history.html", "web/includes/header.html", "web/includes/head.html")
 	if err != nil {
@@ -111,6 +114,7 @@ func historyHandler(w http.ResponseWriter, r *http.Request) {
 	html_tmpl.ExecuteTemplate(w, "history", expressions)
 }
 
+// обработчик для сохранения изменения времени операций
 func savingHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
@@ -118,12 +122,12 @@ func savingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-
+	// получаем указанное пользователем время операций
 	time_plus := r.FormValue("plus")
 	time_minus := r.FormValue("minus")
 	time_multiple := r.FormValue("multiple")
 	time_division := r.FormValue("division")
-
+	// обновляем в БД информацию
 	query := `
 	UPDATE Operations 
 	SET execution_time = ? 
@@ -153,17 +157,18 @@ func savingHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Ошибка обновления (/): %v", err)
 		return
 	}
-
+	// делаем редирект на эту же страницу
 	http.Redirect(w, r, "/settings", http.StatusMovedPermanently)
 }
 
+// обработчик для страницы наблюдения за процессами и воркерами
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	html_tmpl, err := template.ParseFiles("web/status.html", "web/includes/header.html", "web/includes/head.html")
 	if err != nil {
 		fmt.Printf("ошибка загрузки шаблона статуса воркеров: %v", err)
 		return
 	}
-
+	// делаем запрос для информации
 	response, err := http.Get("http://localhost:8080/status")
 	if err != nil {
 		fmt.Printf("не удалось получить информацию о воркерах: %v", err)
@@ -178,13 +183,14 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(response.Body).Decode(&context); err != nil {
-		http.Error(w, "Error decoding JSON: "+err.Error(), http.StatusBadRequest)
+		fmt.Printf("не удалось декодировать: %v", err)
 		return
 	}
-
+	// передаем информацию в шаблон контекстом
 	html_tmpl.ExecuteTemplate(w, "status", context)
 }
 
+// обработчик для страницы времени операций
 func settingsHandler(w http.ResponseWriter, r *http.Request) {
 	html_tmpl, err := template.ParseFiles("web/settings.html", "web/includes/header.html", "web/includes/head.html")
 	if err != nil {
@@ -198,13 +204,13 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-
+	// получаем актуальное время для заполнения полей
 	data, err := db.Query("SELECT execution_time FROM Operations")
 	if err != nil {
 		fmt.Printf("ошибка при получении информации об операциях из БД: %v", err)
 		return
 	}
-
+	// сохраняем время для дальнейшего использования
 	operations := []int{}
 	for data.Next() {
 		var time int
@@ -214,7 +220,7 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		operations = append(operations, time)
 	}
-
+	// передаём время контекстом в шаблон
 	context := struct {
 		Plus     int
 		Minus    int
@@ -230,6 +236,7 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 	html_tmpl.ExecuteTemplate(w, "settings", context)
 }
 
+// обработчик для главной страницы
 func mainHandler(w http.ResponseWriter, r *http.Request) {
 	html_tmpl, err := template.ParseFiles("web/main.html", "web/includes/header.html", "web/includes/head.html")
 	if err != nil {
