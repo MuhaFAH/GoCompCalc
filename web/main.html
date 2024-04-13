@@ -7,10 +7,13 @@
 <body>
   {{ template "header" }}
   <main class="d-flex flex-column align-items-center">
-    <h1 class="primer">Введите ваш пример</h1>
+    <h1 class="primer">Введите ваш пример{{if . }}, <span style="color: orange">{{ . }}</span>{{ end }}</h1>
     <form class="d-flex flex-column align-items-center">
       <input name="send" style="height: 50px; margin: 0 auto; width: 700px; margin-top: 50px;" id="expression" type="text" class="form-control" placeholder="выражение">
-      <button type="button" style="margin-top: 20px;" class="btn btn-warning" onclick="validateAndSend()">Вычислить</button>
+      <div style="margin-top: 20px;">
+        <button type="button" class="btn btn-warning" onclick="validateAndSend()">Вычислить</button>
+        <a class="btn btn-danger" href="/logoutuser/">Выйти</a>
+      </div>
     </form>
     <p class="primer" id="status_text" style="color: white; font-size: 25px; margin-top: 25px; display: none;">Выражение</p>
     <p class="list-element" style="font-size: 20px; display: none;" id="status"></p>
