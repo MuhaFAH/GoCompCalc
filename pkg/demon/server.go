@@ -66,6 +66,7 @@ type Job struct {
 	ID         string
 	Expression string
 	Result     interface{}
+	User       string
 }
 
 // воркер
@@ -81,7 +82,7 @@ func worker(expressionCh <-chan *Job) {
 		// ожидаем выражение
 		job := <-expressionCh
 		// производим вычисление через иную функцию
-		result, err := evaluateExpression(job.Expression, job.ID)
+		result, err := evaluateExpression(job.Expression, job.ID, job.User)
 		if err != nil {
 			mutex.Lock()
 			// если произошла ошибка, то добавляем в БД информацию об этом
@@ -114,19 +115,19 @@ func checkNotEndedExpressions() {
 	}
 	defer db.Close()
 	// получаем не законченные
-	data, err := db.Query("SELECT key, expression FROM Expressions WHERE status = 'в обработке'")
+	data, err := db.Query("SELECT key, expression, user FROM Expressions WHERE status = 'в обработке'")
 	if err != nil {
 		fmt.Printf("ошибка получения информации о незаконченных выражениях: %v", err)
 	}
 
 	for data.Next() {
-		var id, expression string
-		err := data.Scan(&id, &expression)
+		var id, expression, user string
+		err := data.Scan(&id, &expression, &user)
 		if err != nil {
 			fmt.Printf("ошибка загрузки незаконченного выражения: %v", err)
 		}
 		// добавляем их в поток, чтобы воркеры их доделали
-		expressionCh <- &Job{ID: id, Expression: expression}
+		expressionCh <- &Job{ID: id, Expression: expression, User: user}
 	}
 	if err != nil {
 		fmt.Printf("ошибка незаконченного выражения: %v", err)
@@ -255,7 +256,7 @@ func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		// если прислали выражение, то кидаем его в канал, пусть считают :)
 		idForExpression := uuid.New().String()
 		userName := data["user"]
-		expressionCh <- &Job{ID: idForExpression, Expression: expression}
+		expressionCh <- &Job{ID: idForExpression, Expression: expression, User: userName}
 		// добавляем в БД информацию о выражении, что оно сейчас считается
 		query := fmt.Sprintf("INSERT INTO Expressions (key, expression, status, error_message, user) VALUES ('%s', '%s', 'в обработке', 'nil', '%s')", idForExpression, expression, userName)
 		_, err = db.Exec(query)
@@ -279,14 +280,14 @@ func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // функция для высчитывания результата выражения
-func evaluateExpression(expression, id string) (interface{}, error) {
+func evaluateExpression(expression, id, user string) (interface{}, error) {
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
 		return nil, fmt.Errorf("ошибка подключения БД в расчёте: %v", err)
 	}
 	defer db.Close()
 	// пытаемся получить время операций
-	data, err := db.Query("SELECT execution_time FROM Operations")
+	data, err := db.Query("SELECT execution_time FROM Operations WHERE user = ?", user)
 	if err != nil {
 		return nil, fmt.Errorf("не удалось запросить время операций из БД: %v", err)
 	}
