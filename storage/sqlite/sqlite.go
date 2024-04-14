@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -56,6 +57,6 @@ func NewOrCreateDB(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("ошибка создания таблицы пользователей: %v", err)
 	}
 
-	fmt.Println("Создание таблицы: SUCCESS")
+	log.Println("[INFO] Запуск базы данных - SUCCESS")
 	return db, nil
 }

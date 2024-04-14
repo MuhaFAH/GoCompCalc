@@ -33,7 +33,7 @@ func RunServer() {
 	// подключаем файл конфигурации
 	err := godotenv.Load("config/.env")
 	if err != nil {
-		fmt.Printf("ошибка загрузки файла конфигурации: %v", err)
+		log.Printf("[WARNING] Файл конфигурации не был загружен: %v", err)
 	}
 	// подключаем протоколы CORS (заголовки)
 	c := cors.Default()
@@ -54,8 +54,9 @@ func RunServer() {
 
 	mux := c.Handler(http.DefaultServeMux)
 	go func() {
-		fmt.Println("ЗАПУСК ДЕМОНА-АГЕНТА (ПОРТ 8080): SUCCESS")
-		http.ListenAndServe(":8080", mux)
+		port := os.Getenv("DEMON_PORT")
+		log.Printf("[INFO] Запуск демона - SUCCESS [PORT: %s]", port)
+		http.ListenAndServe(":"+port, mux)
 	}()
 
 	checkNotEndedExpressions()
@@ -73,7 +74,7 @@ type Job struct {
 func worker(expressionCh <-chan *Job) {
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
-		fmt.Printf("ошибка подключения БД в воркере: %v", err)
+		log.Printf("[ERROR] База данных не была запущена - WORKER: %v", err)
 		return
 	}
 	defer db.Close()
@@ -88,7 +89,7 @@ func worker(expressionCh <-chan *Job) {
 			// если произошла ошибка, то добавляем в БД информацию об этом
 			_, err = db.Exec(fmt.Sprintf("UPDATE Expressions SET completed_at = CURRENT_TIMESTAMP, status = '%s' WHERE key = '%s'", "ошибка", job.ID))
 			if err != nil {
-				fmt.Printf("ошибка добавления записи в БД о неверном выражении: %v", err)
+				log.Printf("[WARNING] Выражение со статусом ОШИБКА не был добавлен в БД: %v", err)
 				return
 			}
 			mutex.Unlock()
@@ -98,7 +99,7 @@ func worker(expressionCh <-chan *Job) {
 		// если всё хорошо, то сохраняем результат, время выполнение и меняем статус в БД
 		_, err = db.Exec(fmt.Sprintf("UPDATE Expressions SET completed_at = CURRENT_TIMESTAMP, result = '%s', status = '%s' WHERE key = '%s'", fmt.Sprintf("%v", result), "выполнено", job.ID))
 		if err != nil {
-			fmt.Printf("ошибка добавления записи в БД о выполненном выражении: %v", err)
+			log.Printf("[WARNING] Выражение со статусом ВЫПОЛНЕНО не был добавлен в БД: %v", err)
 			return
 		}
 
@@ -110,28 +111,25 @@ func worker(expressionCh <-chan *Job) {
 func checkNotEndedExpressions() {
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
-		fmt.Printf("ошибка подключения БД в проверке выражений: %v", err)
+		log.Printf("[ERROR] База данных не была запущена - CHECK_NOT_ENDED: %v", err)
 		return
 	}
 	defer db.Close()
-	// получаем не законченные
+	// получаем незаконченные
 	data, err := db.Query("SELECT key, expression, user FROM Expressions WHERE status = 'в обработке'")
 	if err != nil {
-		fmt.Printf("ошибка получения информации о незаконченных выражениях: %v", err)
+		log.Printf("[WARNING] Незаконченные выражения не были получены: %v", err)
+		return
 	}
 
 	for data.Next() {
 		var id, expression, user string
 		err := data.Scan(&id, &expression, &user)
 		if err != nil {
-			fmt.Printf("ошибка загрузки незаконченного выражения: %v", err)
+			log.Printf("[WARNING] Незаконченное выражение не было загружено в поток: %v", err)
 		}
 		// добавляем их в поток, чтобы воркеры их доделали
 		expressionCh <- &Job{ID: id, Expression: expression, User: user}
-	}
-	if err != nil {
-		fmt.Printf("ошибка незаконченного выражения: %v", err)
-		return
 	}
 }
 
@@ -139,7 +137,7 @@ func checkNotEndedExpressions() {
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
-		fmt.Printf("ошибка подключения БД в запросе о статусе воркеров: %v", err)
+		log.Printf("[ERROR] База данных не была запущена - STATUS_WORKERS: %v", err)
 		return
 	}
 	defer db.Close()
@@ -148,7 +146,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	// смотрим, какие выражения сейчас вычисляются
 	data, err := db.Query("SELECT expression FROM Expressions WHERE status = 'в обработке'")
 	if err != nil {
-		fmt.Printf("ошибка получения информации для статуса воркеров: %v", err)
+		log.Printf("[WARNING] Вычисляемые выражения не были получены: %v", err)
 		return
 	}
 	mutex.Unlock()
@@ -159,7 +157,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		var expression string
 		err := data.Scan(&expression)
 		if err != nil {
-			fmt.Printf("ошибка загрузки информации для статуса воркеров: %v", err)
+			log.Printf("[WARNING] Информация о воркерах не была получена: %v", err)
 		}
 		inProcessWorkers = append(inProcessWorkers, expression)
 	}
@@ -186,7 +184,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(jsonData)
 	if err != nil {
-		fmt.Printf("ошибка записи JSON о воркерах: %v", err)
+		log.Printf("[ERROR] Ошибка записи JSON о воркерах: %v", err)
 		return
 	}
 }
@@ -195,14 +193,14 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
-		fmt.Printf("ошибка подключения БД в веб-сокетах: %v", err)
+		log.Printf("[ERROR] База данных не была запущена - WEB_SOCKETS: %v", err)
 		return
 	}
 	defer db.Close()
 	// устанавливаем связь
 	connection, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Printf("ошибка подключения сокетов: %v", err)
+		log.Printf("[WARNING] Веб-сокет не были подключен: %v", err)
 		return
 	}
 	defer connection.Close()
@@ -217,7 +215,7 @@ func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		data := make(map[string]string)
 		err = json.Unmarshal(message, &data)
 		if err != nil {
-			fmt.Printf("не удалось загрузить данные: %v", err)
+			log.Printf("[WARNING] Не удалось загрузить данные с сокетов: %v", err)
 			continue
 		}
 		// смотрим, есть ли там выражение или просьба получить результат на выражение, которое было отправлено ранее
@@ -225,7 +223,7 @@ func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		keyForResult, ok2 := data["getresult"]
 
 		if !ok1 && !ok2 {
-			fmt.Printf("в запросе не найдена информация о выражении: %v", err)
+			log.Printf("[WARNING] В пришедшем запросе нет данных: %v", err)
 			continue
 		}
 		// если просят дать результат на ранее присланное выражение
@@ -248,7 +246,7 @@ func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 
 				err = connection.WriteJSON(response)
 				if err != nil {
-					fmt.Printf("не удалось отправить ответные данные о выражении: %v", err)
+					log.Printf("[ERROR] Не удалось отправить ответные данные о выражении: %v", err)
 				}
 			}
 			continue
@@ -261,7 +259,7 @@ func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		query := fmt.Sprintf("INSERT INTO Expressions (key, expression, status, error_message, user) VALUES ('%s', '%s', 'в обработке', 'nil', '%s')", idForExpression, expression, userName)
 		_, err = db.Exec(query)
 		if err != nil {
-			fmt.Printf("не удалось добавить новое выражение в БД: %v", err)
+			log.Printf("[ERROR] Не удалось добавить новое выражение в БД: %v", err)
 			return
 		}
 		// отвечаем тем, что всё хорошо, всё пришло и мы уже считаем
@@ -273,7 +271,7 @@ func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 
 		err = connection.WriteJSON(response)
 		if err != nil {
-			log.Println(err)
+			log.Printf("[ERROR] Не удалось отправить ответ по сокетам: %v", err)
 			continue
 		}
 	}

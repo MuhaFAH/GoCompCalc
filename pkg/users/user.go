@@ -3,6 +3,7 @@ package users
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"regexp"
 	"time"
 
@@ -11,76 +12,50 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Ключ безопасности
 var JWTKey = []byte("MuhaTopSecretKey")
 
-type User struct {
-	ID       int
-	Name     string
-	Password string
-}
-
+// Валидация логина (стандарты)
 func LoginValidation(login string) bool {
 	if len(login) > 16 {
 		return false
 	}
-	matched, err := regexp.MatchString("^[a-zA-Z_]*$", login)
+	if len(login) < 5 {
+		return false
+	}
+
+	check, err := regexp.MatchString("^[a-zA-Z_]*$", login)
 	if err != nil {
 		return false
 	}
-	return matched
+
+	return check
 }
 
+// Хэширование пароля
 func HashingPassword(password string) string {
-	saltedBytes := []byte(password)
-	hashedBytes, err := bcrypt.GenerateFromPassword(saltedBytes, bcrypt.DefaultCost)
+	passBytes := []byte(password)
+	hashedBytes, err := bcrypt.GenerateFromPassword(passBytes, bcrypt.DefaultCost)
 	if err != nil {
-		fmt.Printf("ошибка при хэшировании пароля: %v", err)
+		log.Printf("[ERROR] Ошибка при хэшировании пароля пользователя: %v", err)
 		return ""
 	}
+
 	hash := string(hashedBytes[:])
 	return hash
 }
 
-func CheckPasswordWithHash(login, password string) bool {
-	db, err := sql.Open("sqlite3", "data.db")
-	if err != nil {
-		fmt.Printf("ошибка подключения БД при проверке пароля: %v", err)
-		return false
-	}
-	defer db.Close()
+// Сравнение хэшированного пароля и пароля, введенного пользователем
+func ComparePasswords(hash string, password string) bool {
+	byteHash := []byte(hash)
+	bytePassword := []byte(password)
 
-	var hashedPassword string
+	err := bcrypt.CompareHashAndPassword(byteHash, bytePassword)
 
-	query := "SELECT hashed_password FROM Users WHERE login = ?"
-	err = db.QueryRow(query, login).Scan(&hashedPassword)
-
-	if err != nil {
-		fmt.Printf("ошибка при получении хэшированного пароля: %v", err)
-		return false
-	}
-
-	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-
-	if err != nil {
-		fmt.Printf("ошибка при сравнении пароля и хэша: %v", err)
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
-func ComparePasswords(hashedPwd string, plainPwd string) bool {
-	byteHash := []byte(hashedPwd)
-	plainPwdByte := []byte(plainPwd)
-	err := bcrypt.CompareHashAndPassword(byteHash, plainPwdByte)
-	if err != nil {
-		fmt.Println("Ошибка при сравнении паролей:", err)
-		return false
-	}
-
-	return true
-}
-
+// Выдача индивидуального токена пользователю
 func GetNewTokenJWT(login string) string {
 	expirationTime := time.Now().Add(24 * time.Hour)
 
@@ -93,17 +68,18 @@ func GetNewTokenJWT(login string) string {
 	tokenString, err := token.SignedString(JWTKey)
 
 	if err != nil {
-		fmt.Printf("ошибка при создании токена: %v", err)
+		log.Printf("[ERROR] Ошибка при создании токена для пользователя: %v", err)
 		return ""
 	}
 
 	return tokenString
 }
 
+// Валидация имеющегося у пользователя токена
 func ValidateTokenJWT(tokenStr string) bool {
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
-		fmt.Printf("ошибка подключения БД при валидации токена: %v", err)
+		log.Printf("[ERROR] Ошибка при подключении базы данных - TOKEN_VALIDATION: %v", err)
 		return false
 	}
 	defer db.Close()
@@ -118,26 +94,22 @@ func ValidateTokenJWT(tokenStr string) bool {
 		if err == jwt.ErrSignatureInvalid {
 			return false
 		} else {
-			fmt.Printf("Фигня при парсинге лол")
+			log.Printf("[ERROR] Парсинг при валидации токена провален: %v", err)
 			return false
 		}
 	}
 
 	if !token.Valid {
-		// Если токен недействителен, перенаправляем на страницу регистрации
 		return false
 	}
 
 	var exists bool
-
 	query := "SELECT EXISTS (SELECT 1 FROM Users WHERE login = ?)"
 	err = db.QueryRow(query, claims.Subject).Scan(&exists)
-
 	if err != nil {
-		fmt.Printf("ошибка при проверке токена на существование логина: %v", err)
+		log.Printf("[ERROR] Ошибка при проверке токена на существование логина: %v", err)
 		return false
 	}
-
 	if !exists {
 		return false
 	}
@@ -145,6 +117,7 @@ func ValidateTokenJWT(tokenStr string) bool {
 	return true
 }
 
+// Получение логина пользователя по его токену
 func GetUserLogin(tokenStr string) string {
 	claims := &jwt.StandardClaims{}
 
@@ -156,7 +129,7 @@ func GetUserLogin(tokenStr string) string {
 		if err == jwt.ErrSignatureInvalid {
 			return ""
 		} else {
-			fmt.Printf("Фигня при парсинге лол")
+			log.Printf("[ERROR] Парсинг при получении логена через токен провален: %v", err)
 			return ""
 		}
 	}
@@ -164,18 +137,20 @@ func GetUserLogin(tokenStr string) string {
 	return claims.Subject
 }
 
+// Создание математических операций для определенного пользователя
 func CreateUserOperations(login string) {
 	db, err := sql.Open("sqlite3", "data.db")
 	if err != nil {
-		fmt.Printf("ошибка подключения БД при создании операций пользователю: %v", err)
+		log.Printf("[ERROR] Ошибка при подключении базы данных - USER_OPERATIONS: %v", err)
 		return
 	}
 	defer db.Close()
 
 	query := fmt.Sprintf("INSERT INTO Operations (operation_type, execution_time, user) VALUES ('+', 100, '%s'), ('-', 100, '%s'), ('*', 100, '%s'), ('/', 100, '%s')", login, login, login, login)
+
 	_, err = db.Exec(query)
 	if err != nil {
-		fmt.Printf("ошибка заполнения таблицы операторов пользователю: %v", err)
+		log.Printf("[ERROR] Ошибка заполнения таблицы операторов пользователя: %v", err)
 		return
 	}
 }
