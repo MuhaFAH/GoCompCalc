@@ -254,9 +254,10 @@ func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// если прислали выражение, то кидаем его в канал, пусть считают :)
 		idForExpression := uuid.New().String()
+		userName := data["user"]
 		expressionCh <- &Job{ID: idForExpression, Expression: expression}
 		// добавляем в БД информацию о выражении, что оно сейчас считается
-		query := fmt.Sprintf("INSERT INTO Expressions (key, expression, status, error_message) VALUES ('%s', '%s', 'в обработке', 'nil')", idForExpression, expression)
+		query := fmt.Sprintf("INSERT INTO Expressions (key, expression, status, error_message, user) VALUES ('%s', '%s', 'в обработке', 'nil', '%s')", idForExpression, expression, userName)
 		_, err = db.Exec(query)
 		if err != nil {
 			fmt.Printf("не удалось добавить новое выражение в БД: %v", err)

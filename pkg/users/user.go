@@ -101,6 +101,13 @@ func GetNewTokenJWT(login string) string {
 }
 
 func ValidateTokenJWT(tokenStr string) bool {
+	db, err := sql.Open("sqlite3", "data.db")
+	if err != nil {
+		fmt.Printf("ошибка подключения БД при валидации токена: %v", err)
+		return false
+	}
+	defer db.Close()
+
 	claims := &jwt.StandardClaims{}
 
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
@@ -118,6 +125,20 @@ func ValidateTokenJWT(tokenStr string) bool {
 
 	if !token.Valid {
 		// Если токен недействителен, перенаправляем на страницу регистрации
+		return false
+	}
+
+	var exists bool
+
+	query := "SELECT EXISTS (SELECT 1 FROM Users WHERE login = ?)"
+	err = db.QueryRow(query, claims.Subject).Scan(&exists)
+
+	if err != nil {
+		fmt.Printf("ошибка при проверке токена на существование логина: %v", err)
+		return false
+	}
+
+	if !exists {
 		return false
 	}
 
@@ -141,4 +162,20 @@ func GetUserLogin(tokenStr string) string {
 	}
 
 	return claims.Subject
+}
+
+func CreateUserOperations(login string) {
+	db, err := sql.Open("sqlite3", "data.db")
+	if err != nil {
+		fmt.Printf("ошибка подключения БД при создании операций пользователю: %v", err)
+		return
+	}
+	defer db.Close()
+
+	query := fmt.Sprintf("INSERT INTO Operations (operation_type, execution_time, user) VALUES ('+', 100, '%s'), ('-', 100, '%s'), ('*', 100, '%s'), ('/', 100, '%s')", login, login, login, login)
+	_, err = db.Exec(query)
+	if err != nil {
+		fmt.Printf("ошибка заполнения таблицы операторов пользователю: %v", err)
+		return
+	}
 }

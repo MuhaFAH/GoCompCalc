@@ -7,7 +7,7 @@
 <body>
   {{ template "header" }}
   <main class="d-flex flex-column align-items-center">
-    <h1 class="primer">Введите ваш пример{{if . }}, <span style="color: orange">{{ . }}</span>{{ end }}</h1>
+    <h1 class="primer">Введите Ваш пример{{if . }}, <span id="user" style="color: orange">{{ . }}</span>{{ end }}</h1>
     <form class="d-flex flex-column align-items-center">
       <input name="send" style="height: 50px; margin: 0 auto; width: 700px; margin-top: 50px;" id="expression" type="text" class="form-control" placeholder="выражение">
       <div style="margin-top: 20px;">

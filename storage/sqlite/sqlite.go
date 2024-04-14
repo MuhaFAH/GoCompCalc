@@ -28,7 +28,7 @@ func NewOrCreateDB(path string) (*sql.DB, error) {
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		completed_at TIMESTAMP,
 		error_message TEXT,
-		user_id INTEGER
+		user TEXT
 	);`
 	_, err = db.Exec(query)
 	if err != nil {
@@ -39,21 +39,11 @@ func NewOrCreateDB(path string) (*sql.DB, error) {
 	CREATE TABLE IF NOT EXISTS Operations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		operation_type TEXT NOT NULL,
-		execution_time INTEGER NOT NULL);`
+		execution_time INTEGER NOT NULL,
+		user TEXT);`
 	_, err = db.Exec(query)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка создания таблицы операторов: %v", err)
-	}
-
-	query = `
-	INSERT INTO Operations (operation_type, execution_time) VALUES
-    ('+', 100),
-    ('-', 100),
-    ('*', 100),
-    ('/', 100);`
-	_, err = db.Exec(query)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка заполнения таблицы операторов: %v", err)
 	}
 
 	query = `
