@@ -265,7 +265,7 @@ func registrationHandler(w http.ResponseWriter, r *http.Request) {
 			errorMessage = "Данный логин уже занят <3"
 		}
 		if cookie.Value == "NotValid" {
-			errorMessage = "Ваш логин не соответствует стандартам :("
+			errorMessage = "Ваш логин не соответствует стандартам: от 5 до 16 символов, без цифр"
 		}
 		if cookie.Value == "DontMatch" {
 			errorMessage = "Пароли не совпадают!"
