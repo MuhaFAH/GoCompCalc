@@ -114,7 +114,7 @@ func verificateLoginUserHandler(w http.ResponseWriter, r *http.Request) {
 		Path:    "/",
 	})
 
-	http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 // обработчик для страницы входа пользователя
@@ -236,7 +236,7 @@ func registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Создаем в БД под пользователя индивидуальные настройки математических операций
-	users.CreateUserOperations(login)
+	users.CreateUserOperations(login, "data.db")
 
 	// Создаем JWT-токен и кладем пользователю в куки
 	usertoken := users.GetNewTokenJWT(login)
@@ -293,7 +293,7 @@ func historyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
-	if !users.ValidateTokenJWT(cookie.Value) {
+	if !users.ValidateTokenJWT(cookie.Value, "data.db") {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
@@ -384,7 +384,7 @@ func savingHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
-	if !users.ValidateTokenJWT(cookie.Value) {
+	if !users.ValidateTokenJWT(cookie.Value, "data.db") {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
@@ -445,7 +445,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
-	if !users.ValidateTokenJWT(cookie.Value) {
+	if !users.ValidateTokenJWT(cookie.Value, "data.db") {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
@@ -487,7 +487,7 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
-	if !users.ValidateTokenJWT(cookie.Value) {
+	if !users.ValidateTokenJWT(cookie.Value, "data.db") {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
@@ -548,7 +548,7 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}
-	if !users.ValidateTokenJWT(token) {
+	if !users.ValidateTokenJWT(token, "data.db") {
 		http.Redirect(w, r, "/registration", http.StatusFound)
 		return
 	}

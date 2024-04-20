@@ -76,8 +76,8 @@ func GetNewTokenJWT(login string) string {
 }
 
 // Валидация имеющегося у пользователя токена
-func ValidateTokenJWT(tokenStr string) bool {
-	db, err := sql.Open("sqlite3", "data.db")
+func ValidateTokenJWT(tokenStr, database string) bool {
+	db, err := sql.Open("sqlite3", database)
 	if err != nil {
 		log.Printf("[ERROR] Ошибка при подключении базы данных - TOKEN_VALIDATION: %v", err)
 		return false
@@ -91,12 +91,7 @@ func ValidateTokenJWT(tokenStr string) bool {
 	})
 
 	if err != nil {
-		if err == jwt.ErrSignatureInvalid {
-			return false
-		} else {
-			log.Printf("[ERROR] Парсинг при валидации токена провален: %v", err)
-			return false
-		}
+		return false
 	}
 
 	if !token.Valid {
@@ -126,20 +121,15 @@ func GetUserLogin(tokenStr string) string {
 	})
 
 	if err != nil {
-		if err == jwt.ErrSignatureInvalid {
-			return ""
-		} else {
-			log.Printf("[ERROR] Парсинг при получении логена через токен провален: %v", err)
-			return ""
-		}
+		return ""
 	}
 
 	return claims.Subject
 }
 
 // Создание математических операций для определенного пользователя
-func CreateUserOperations(login string) {
-	db, err := sql.Open("sqlite3", "data.db")
+func CreateUserOperations(login, database string) {
+	db, err := sql.Open("sqlite3", database)
 	if err != nil {
 		log.Printf("[ERROR] Ошибка при подключении базы данных - USER_OPERATIONS: %v", err)
 		return
