@@ -16,6 +16,7 @@
                 <th class="table-headers">Выражение</th>
                 <th class="table-headers">Дата создания</th>
                 <th class="table-headers">Дата завершения</th>
+                <th class="table-headers">Пользователь</th>
             </tr>
         </thead>
         <tbody>
@@ -26,6 +27,7 @@
                 <td>{{ .Expression }}</td>
                 <td>{{ .CreatedAt.Format "2006-01-02 15:04:05" }}</td>
                 <td>{{ .CompletedAt.Format "2006-01-02 15:04:05" }}</td>
+                <td>{{ .User }}</td>
             </tr>
         {{ end }}
         </tbody>

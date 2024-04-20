@@ -1,0 +1,579 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>demon: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">gocompcalc/pkg/demon/server.go (0.0%)</option>
+				
+				<option value="file1">gocompcalc/pkg/users/user.go (76.6%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package demon
+
+import (
+        "database/sql"
+        "encoding/json"
+        "fmt"
+        "log"
+        "net/http"
+        "os"
+        "strconv"
+        "strings"
+        "sync"
+        "time"
+
+        "github.com/Knetic/govaluate"
+        "github.com/google/uuid"
+        "github.com/gorilla/websocket"
+        "github.com/joho/godotenv"
+        "github.com/rs/cors"
+)
+
+var (
+        mutex        sync.Mutex
+        expressionCh chan *Job
+        upgrader     = websocket.Upgrader{
+                CheckOrigin: func(r *http.Request) bool <span class="cov0" title="0">{
+                        return true
+                }</span>,
+        }
+)
+
+func RunServer() <span class="cov0" title="0">{
+        // подключаем файл конфигурации
+        err := godotenv.Load("config/.env")
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[WARNING] Файл конфигурации не был загружен: %v", err)
+        }</span>
+        // подключаем протоколы CORS (заголовки)
+        <span class="cov0" title="0">c := cors.Default()
+        // берем число воркеров-вычислителей из файла конфигурации
+        maxWorkers, err := strconv.Atoi(os.Getenv("COUNT_WORKERS"))
+        if err != nil </span><span class="cov0" title="0">{
+                maxWorkers = 5
+        }</span>
+        // создаем канал для выражений, которые будут приходить от оркестратора
+        <span class="cov0" title="0">expressionCh = make(chan *Job, maxWorkers)
+        // запускаем на фон наших вычислителей
+        for i := 0; i &lt; maxWorkers; i++ </span><span class="cov0" title="0">{
+                go worker(expressionCh)
+        }</span>
+
+        <span class="cov0" title="0">http.HandleFunc("/status", statusHandler)
+        http.HandleFunc("/ws", ConnectionCalculateHandler)
+
+        mux := c.Handler(http.DefaultServeMux)
+        go func() </span><span class="cov0" title="0">{
+                port := os.Getenv("DEMON_PORT")
+                log.Printf("[INFO] Запуск демона - SUCCESS [PORT: %s]", port)
+                http.ListenAndServe(":"+port, mux)
+        }</span>()
+
+        <span class="cov0" title="0">checkNotEndedExpressions()</span>
+}
+
+// структура для приходящих выражений
+type Job struct {
+        ID         string
+        Expression string
+        Result     interface{}
+        User       string
+}
+
+// воркер
+func worker(expressionCh &lt;-chan *Job) <span class="cov0" title="0">{
+        db, err := sql.Open("sqlite3", "data.db")
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] База данных не была запущена - WORKER: %v", err)
+                return
+        }</span>
+        <span class="cov0" title="0">defer db.Close()
+        // воркеры работают постоянно
+        for </span><span class="cov0" title="0">{
+                // ожидаем выражение
+                job := &lt;-expressionCh
+                // производим вычисление через иную функцию
+                result, err := evaluateExpression(job.Expression, job.ID, job.User)
+                if err != nil </span><span class="cov0" title="0">{
+                        mutex.Lock()
+                        // если произошла ошибка, то добавляем в БД информацию об этом
+                        _, err = db.Exec(fmt.Sprintf("UPDATE Expressions SET completed_at = CURRENT_TIMESTAMP, status = '%s' WHERE key = '%s'", "ошибка", job.ID))
+                        if err != nil </span><span class="cov0" title="0">{
+                                log.Printf("[WARNING] Выражение со статусом ОШИБКА не был добавлен в БД: %v", err)
+                                return
+                        }</span>
+                        <span class="cov0" title="0">mutex.Unlock()
+                        continue</span>
+                }
+                <span class="cov0" title="0">mutex.Lock()
+                // если всё хорошо, то сохраняем результат, время выполнение и меняем статус в БД
+                _, err = db.Exec(fmt.Sprintf("UPDATE Expressions SET completed_at = CURRENT_TIMESTAMP, result = '%s', status = '%s' WHERE key = '%s'", fmt.Sprintf("%v", result), "выполнено", job.ID))
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("[WARNING] Выражение со статусом ВЫПОЛНЕНО не был добавлен в БД: %v", err)
+                        return
+                }</span>
+
+                <span class="cov0" title="0">mutex.Unlock()</span>
+        }
+}
+
+// функция для проверки на незаконченные выражения, которые остались с прошлой работы сервера
+func checkNotEndedExpressions() <span class="cov0" title="0">{
+        db, err := sql.Open("sqlite3", "data.db")
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] База данных не была запущена - CHECK_NOT_ENDED: %v", err)
+                return
+        }</span>
+        <span class="cov0" title="0">defer db.Close()
+        // получаем незаконченные
+        data, err := db.Query("SELECT key, expression, user FROM Expressions WHERE status = 'в обработке'")
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[WARNING] Незаконченные выражения не были получены: %v", err)
+                return
+        }</span>
+
+        <span class="cov0" title="0">for data.Next() </span><span class="cov0" title="0">{
+                var id, expression, user string
+                err := data.Scan(&amp;id, &amp;expression, &amp;user)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("[WARNING] Незаконченное выражение не было загружено в поток: %v", err)
+                }</span>
+                // добавляем их в поток, чтобы воркеры их доделали
+                <span class="cov0" title="0">expressionCh &lt;- &amp;Job{ID: id, Expression: expression, User: user}</span>
+        }
+}
+
+// функция для ответа оркестратору статусом воркеров
+func statusHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        db, err := sql.Open("sqlite3", "data.db")
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] База данных не была запущена - STATUS_WORKERS: %v", err)
+                return
+        }</span>
+        <span class="cov0" title="0">defer db.Close()
+
+        mutex.Lock()
+        // смотрим, какие выражения сейчас вычисляются
+        data, err := db.Query("SELECT expression FROM Expressions WHERE status = 'в обработке'")
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[WARNING] Вычисляемые выражения не были получены: %v", err)
+                return
+        }</span>
+        <span class="cov0" title="0">mutex.Unlock()
+        // слайс для выражений, над которыми сейчас работают воркеры
+        inProcessWorkers := []string{}
+        // загружаем выражения
+        for data.Next() </span><span class="cov0" title="0">{
+                var expression string
+                err := data.Scan(&amp;expression)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("[WARNING] Информация о воркерах не была получена: %v", err)
+                }</span>
+                <span class="cov0" title="0">inProcessWorkers = append(inProcessWorkers, expression)</span>
+        }
+        // получаем информацию о том, сколько всего воркеров и сколько свободно
+        <span class="cov0" title="0">maxWorkers, err := strconv.Atoi(os.Getenv("COUNT_WORKERS"))
+        if err != nil </span><span class="cov0" title="0">{
+                maxWorkers = 5
+        }</span>
+        <span class="cov0" title="0">freeWorkers := maxWorkers - len(inProcessWorkers)
+        if freeWorkers &lt; 0 </span><span class="cov0" title="0">{
+                freeWorkers = 0
+        }</span>
+        // делаем JSON со всей информацией
+        <span class="cov0" title="0">structData := struct {
+                FreeWorkers int      `json:"free_workers"`
+                MaxWorkers  int      `json:"max_workers"`
+                InProcess   []string `json:"expressions_in_process"`
+        }{FreeWorkers: freeWorkers,
+                MaxWorkers: maxWorkers,
+                InProcess:  inProcessWorkers}
+
+        jsonData, _ := json.Marshal(structData)
+        // отправляем на другой сервер
+        w.Header().Set("Content-Type", "application/json")
+        _, err = w.Write(jsonData)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] Ошибка записи JSON о воркерах: %v", err)
+                return
+        }</span>
+}
+
+// функция для веб-сокет связи с оркестратором и вычисления выражений в потоке
+func ConnectionCalculateHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        db, err := sql.Open("sqlite3", "data.db")
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] База данных не была запущена - WEB_SOCKETS: %v", err)
+                return
+        }</span>
+        <span class="cov0" title="0">defer db.Close()
+        // устанавливаем связь
+        connection, err := upgrader.Upgrade(w, r, nil)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[WARNING] Веб-сокет не были подключен: %v", err)
+                return
+        }</span>
+        <span class="cov0" title="0">defer connection.Close()
+
+        for </span><span class="cov0" title="0">{
+                // ожидаем информацию
+                _, message, err := connection.ReadMessage()
+                if err != nil </span><span class="cov0" title="0">{
+                        return
+                }</span>
+
+                <span class="cov0" title="0">data := make(map[string]string)
+                err = json.Unmarshal(message, &amp;data)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("[WARNING] Не удалось загрузить данные с сокетов: %v", err)
+                        continue</span>
+                }
+                // смотрим, есть ли там выражение или просьба получить результат на выражение, которое было отправлено ранее
+                <span class="cov0" title="0">expression, ok1 := data["expression"]
+                keyForResult, ok2 := data["getresult"]
+
+                if !ok1 &amp;&amp; !ok2 </span><span class="cov0" title="0">{
+                        log.Printf("[WARNING] В пришедшем запросе нет данных: %v", err)
+                        continue</span>
+                }
+                // если просят дать результат на ранее присланное выражение
+                <span class="cov0" title="0">if ok2 </span><span class="cov0" title="0">{
+
+                        var (
+                                result     string
+                                expression string
+                        )
+                        // получаем выражение по присланному ID
+                        data := db.QueryRow("SELECT result, expression FROM Expressions WHERE key = ?", keyForResult)
+                        data.Scan(&amp;result, &amp;expression)
+                        // если результат есть, шлём
+                        if len(result) &gt; 0 </span><span class="cov0" title="0">{
+                                response := map[string]interface{}{
+                                        "result":     result,
+                                        "expression": expression,
+                                        "id":         keyForResult,
+                                }
+
+                                err = connection.WriteJSON(response)
+                                if err != nil </span><span class="cov0" title="0">{
+                                        log.Printf("[ERROR] Не удалось отправить ответные данные о выражении: %v", err)
+                                }</span>
+                        }
+                        <span class="cov0" title="0">continue</span>
+                }
+                // если прислали выражение, то кидаем его в канал, пусть считают :)
+                <span class="cov0" title="0">idForExpression := uuid.New().String()
+                userName := data["user"]
+                expressionCh &lt;- &amp;Job{ID: idForExpression, Expression: expression, User: userName}
+                // добавляем в БД информацию о выражении, что оно сейчас считается
+                query := fmt.Sprintf("INSERT INTO Expressions (key, expression, status, error_message, user) VALUES ('%s', '%s', 'в обработке', 'nil', '%s')", idForExpression, expression, userName)
+                _, err = db.Exec(query)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("[ERROR] Не удалось добавить новое выражение в БД: %v", err)
+                        return
+                }</span>
+                // отвечаем тем, что всё хорошо, всё пришло и мы уже считаем
+                <span class="cov0" title="0">response := map[string]interface{}{
+                        "status":     "в обработке",
+                        "expression": expression,
+                        "id":         idForExpression,
+                }
+
+                err = connection.WriteJSON(response)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("[ERROR] Не удалось отправить ответ по сокетам: %v", err)
+                        continue</span>
+                }
+        }
+}
+
+// функция для высчитывания результата выражения
+func evaluateExpression(expression, id, user string) (interface{}, error) <span class="cov0" title="0">{
+        db, err := sql.Open("sqlite3", "data.db")
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("ошибка подключения БД в расчёте: %v", err)
+        }</span>
+        <span class="cov0" title="0">defer db.Close()
+        // пытаемся получить время операций
+        data, err := db.Query("SELECT execution_time FROM Operations WHERE user = ?", user)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("не удалось запросить время операций из БД: %v", err)
+        }</span>
+        // загружаем время операций
+        <span class="cov0" title="0">operations := []int{}
+        for data.Next() </span><span class="cov0" title="0">{
+                var time int
+                err := data.Scan(&amp;time)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("ошибка загрузки операций из БД: %v", err)
+                }</span>
+                <span class="cov0" title="0">operations = append(operations, time)</span>
+        }
+        // считаем сколько в общей сумме потребуется времени
+        <span class="cov0" title="0">plus_time := operations[0] * strings.Count(expression, "+")
+        minus_time := operations[1] * strings.Count(expression, "-")
+        multiple_time := operations[2] * strings.Count(expression, "*")
+        division_time := operations[3] * strings.Count(expression, "/")
+        // создаем выражение
+        expr, err := govaluate.NewEvaluableExpression(expression)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("не удалось преобразовать в выражение: %v", err)
+        }</span>
+        // производим расчёт
+        <span class="cov0" title="0">result, err := expr.Evaluate(nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("не удалось провести расчёт выражения: %v", err)
+        }</span>
+
+        <span class="cov0" title="0">timing := time.Duration(plus_time+minus_time+multiple_time+division_time) * time.Millisecond
+        // если вообще нет знаков операций :(
+        if timing &lt; 1*time.Millisecond </span><span class="cov0" title="0">{
+                timing = time.Millisecond
+        }</span>
+        // тянем на рассчитанное время
+        <span class="cov0" title="0">time.Sleep(timing)
+        return result, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package users
+
+import (
+        "database/sql"
+        "fmt"
+        "log"
+        "regexp"
+        "time"
+
+        "github.com/dgrijalva/jwt-go"
+        _ "github.com/mattn/go-sqlite3"
+        "golang.org/x/crypto/bcrypt"
+)
+
+// Ключ безопасности
+var JWTKey = []byte("MuhaTopSecretKey")
+
+// Валидация логина (стандарты)
+func LoginValidation(login string) bool <span class="cov8" title="1">{
+        if len(login) &gt; 16 </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">if len(login) &lt; 5 </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">check, err := regexp.MatchString("^[a-zA-Z_]*$", login)
+        if err != nil </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">return check</span>
+}
+
+// Хэширование пароля
+func HashingPassword(password string) string <span class="cov8" title="1">{
+        passBytes := []byte(password)
+        hashedBytes, err := bcrypt.GenerateFromPassword(passBytes, bcrypt.DefaultCost)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] Ошибка при хэшировании пароля пользователя: %v", err)
+                return ""
+        }</span>
+
+        <span class="cov8" title="1">hash := string(hashedBytes[:])
+        return hash</span>
+}
+
+// Сравнение хэшированного пароля и пароля, введенного пользователем
+func ComparePasswords(hash string, password string) bool <span class="cov8" title="1">{
+        byteHash := []byte(hash)
+        bytePassword := []byte(password)
+
+        err := bcrypt.CompareHashAndPassword(byteHash, bytePassword)
+
+        return err == nil
+}</span>
+
+// Выдача индивидуального токена пользователю
+func GetNewTokenJWT(login string) string <span class="cov8" title="1">{
+        expirationTime := time.Now().Add(24 * time.Hour)
+
+        claims := &amp;jwt.StandardClaims{
+                Subject:   login,
+                ExpiresAt: expirationTime.Unix(),
+        }
+
+        token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+        tokenString, err := token.SignedString(JWTKey)
+
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] Ошибка при создании токена для пользователя: %v", err)
+                return ""
+        }</span>
+
+        <span class="cov8" title="1">return tokenString</span>
+}
+
+// Валидация имеющегося у пользователя токена
+func ValidateTokenJWT(tokenStr, database string) bool <span class="cov8" title="1">{
+        db, err := sql.Open("sqlite3", database)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] Ошибка при подключении базы данных - TOKEN_VALIDATION: %v", err)
+                return false
+        }</span>
+        <span class="cov8" title="1">defer db.Close()
+
+        claims := &amp;jwt.StandardClaims{}
+
+        token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) </span><span class="cov8" title="1">{
+                return JWTKey, nil
+        }</span>)
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">if !token.Valid </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">var exists bool
+        query := "SELECT EXISTS (SELECT 1 FROM Users WHERE login = ?)"
+        err = db.QueryRow(query, claims.Subject).Scan(&amp;exists)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] Ошибка при проверке токена на существование логина: %v", err)
+                return false
+        }</span>
+        <span class="cov8" title="1">if !exists </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">return true</span>
+}
+
+// Получение логина пользователя по его токену
+func GetUserLogin(tokenStr string) string <span class="cov8" title="1">{
+        claims := &amp;jwt.StandardClaims{}
+
+        _, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) </span><span class="cov8" title="1">{
+                return JWTKey, nil
+        }</span>)
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                return ""
+        }</span>
+
+        <span class="cov8" title="1">return claims.Subject</span>
+}
+
+// Создание математических операций для определенного пользователя
+func CreateUserOperations(login, database string) <span class="cov8" title="1">{
+        db, err := sql.Open("sqlite3", database)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] Ошибка при подключении базы данных - USER_OPERATIONS: %v", err)
+                return
+        }</span>
+        <span class="cov8" title="1">defer db.Close()
+
+        query := fmt.Sprintf("INSERT INTO Operations (operation_type, execution_time, user) VALUES ('+', 100, '%s'), ('-', 100, '%s'), ('*', 100, '%s'), ('/', 100, '%s')", login, login, login, login)
+
+        _, err = db.Exec(query)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[ERROR] Ошибка заполнения таблицы операторов пользователя: %v", err)
+                return
+        }</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

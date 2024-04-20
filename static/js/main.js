@@ -61,6 +61,7 @@ function isBalanced(expression) {
 function sendExpression() {
 
     var expression = document.getElementById("expression").value;
+    var user = document.getElementById("user").innerHTML;
     var statusElement = document.getElementById("status");
     var statusText = document.getElementById("status_text");
     var processText = document.getElementById("process_text");
@@ -79,7 +80,7 @@ function sendExpression() {
 
     socket.onopen = function(event) {
         console.log("WebSocket соединение успешно установлено");
-        socket.send(JSON.stringify({ expression: expression }));
+        socket.send(JSON.stringify({ expression: expression, user: user }));
     };
 
     var intervalId;

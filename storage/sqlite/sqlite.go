@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -20,14 +21,15 @@ func NewOrCreateDB(path string) (*sql.DB, error) {
 
 	query := `
 	CREATE TABLE IF NOT EXISTS Expressions (
-		id INTEGER PRIMARY KEY,
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		key TEXT NOT NULL,
 		expression TEXT NOT NULL,
 		result TEXT,
 		status TEXT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		completed_at TIMESTAMP,
-		error_message TEXT
+		error_message TEXT,
+		user TEXT
 	);`
 	_, err = db.Exec(query)
 	if err != nil {
@@ -36,26 +38,25 @@ func NewOrCreateDB(path string) (*sql.DB, error) {
 
 	query = `
 	CREATE TABLE IF NOT EXISTS Operations (
-		id INTEGER PRIMARY KEY,
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		operation_type TEXT NOT NULL,
-		execution_time INTEGER NOT NULL
-	);`
+		execution_time INTEGER NOT NULL,
+		user TEXT);`
 	_, err = db.Exec(query)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка создания таблицы операторов: %v", err)
 	}
 
 	query = `
-	INSERT INTO Operations (operation_type, execution_time) VALUES
-    ('+', 100),
-    ('-', 100),
-    ('*', 100),
-    ('/', 100);`
+	CREATE TABLE IF NOT EXISTS Users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, 
+		login TEXT UNIQUE,
+		hashed_password TEXT);`
 	_, err = db.Exec(query)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка заполнения таблицы операторов: %v", err)
+		return nil, fmt.Errorf("ошибка создания таблицы пользователей: %v", err)
 	}
 
-	fmt.Println("Создание таблицы: SUCCESS")
+	log.Println("[INFO] Запуск базы данных - SUCCESS")
 	return db, nil
 }

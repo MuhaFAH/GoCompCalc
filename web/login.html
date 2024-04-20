@@ -1,0 +1,24 @@
+{{ define "login" }}
+
+<!DOCTYPE html>
+<html lang="ru">
+{{ template "head" }}
+<body>
+    {{ template "header" }}
+    <main>
+      <h1 class="primer">Вход</h1>
+      <form class="d-flex flex-column align-items-center" action="/loginning/" method="post">
+        <label style="margin-top: 50px; margin-bottom: 10px; color: white;" class="lead">Логин</label>
+        <input name="login" style="height: 50px; margin: 0 auto; width: 450px;" type="text" class="form-control" id="primer" placeholder="введите логин">
+        <br>
+        <label style="margin-bottom: 10px; color: white;" class="lead">Пароль</label>
+        <input name="password" style="height: 50px; margin: 0 auto; width: 450px;" type="password" class="form-control" id="primer" placeholder="введите пароль">
+        <br>
+        <button class="btn btn-warning" style="margin: auto 0;">Войти</button>
+        <span class="lead" style="color: red; margin-top: 10px;">{{ if .errorMessage }} {{ .errorMessage }} {{ end }}</span>
+      </form>
+    </main>
+</body>
+</html>
+
+{{ end }}

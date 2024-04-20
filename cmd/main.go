@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"gocompcalc/pkg/demon"
 	"gocompcalc/pkg/orchestrator"
 	"gocompcalc/storage/sqlite"
@@ -13,13 +12,12 @@ import (
 // запуск сервера
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(err)
+		log.Printf("[ERROR] ошибка при подключении базы данных: %v", err)
 	}
 }
 
 func run() error {
-
-	fmt.Println("-|---- ЗАПУСК СЕРВЕРА ---|-")
+	log.Println("[INFO] Запуск системы...")
 
 	// создание или подключение БД
 	db, err := sqlite.NewOrCreateDB("data.db")
@@ -27,6 +25,7 @@ func run() error {
 		return err
 	}
 	db.Close()
+
 	// включаем агента
 	demon.RunServer()
 	// включаем оркестратора
